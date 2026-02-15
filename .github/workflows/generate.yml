@@ -1,0 +1,62 @@
+name: Generate no-resolve rules
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Generate rules
+        run: node scripts/generate.mjs
+
+      - name: Check for changes
+        id: check
+        run: |
+          has_changes=false
+          for file in dist/*.txt; do
+            name=$(basename "$file")
+            # Fetch existing file from release branch (if any)
+            old=$(curl -sf "https://raw.githubusercontent.com/${{ github.repository }}/release/$name" || true)
+            new=$(cat "$file")
+            if [ "$old" != "$new" ]; then
+              has_changes=true
+              break
+            fi
+          done
+          echo "has_changes=$has_changes" >> "$GITHUB_OUTPUT"
+
+      - name: Push to release branch
+        if: steps.check.outputs.has_changes == 'true'
+        run: |
+          cd dist
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b release
+          git add .
+          git commit -m "Auto-update rules $(date -u +%Y-%m-%d)"
+          git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          git push -f origin release
+
+      - name: Create release
+        if: steps.check.outputs.has_changes == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag=$(date -u +%Y%m%d%H%M)
+          gh release create "$tag" dist/*.txt \
+            --repo "${{ github.repository }}" \
+            --title "$tag" \
+            --notes "Auto-generated no-resolve rules"
