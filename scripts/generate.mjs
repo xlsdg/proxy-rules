@@ -7,11 +7,11 @@ const DIST_DIR = path.resolve(__dirname, "..", "dist");
 
 const RULE_SOURCES = [
   {
-    tag: "tgcidr",
+    name: "tgcidr",
     url: "https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/telegramcidr.txt",
   },
   {
-    tag: "cncidr",
+    name: "cncidr",
     url: "https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/cncidr.txt",
   },
 ];
@@ -23,29 +23,27 @@ const NO_RESOLVE_RULE_TYPES = new Set([
   "GEOIP",
 ]);
 
-function isIpv4Cidr(value) {
-  const match = value.match(/^((?:\d{1,3}\.){3}\d{1,3})\/(\d{1,2})$/);
-  const ip = match?.[1];
-  const prefixLengthText = match?.[2];
-  if (!ip || !prefixLengthText) return false;
+function isIpv4Cidr(input) {
+  const match = input.match(/^((?:\d{1,3}\.){3}\d{1,3})\/(\d{1,2})$/);
+  if (!match) return false;
 
-  const prefixLength = Number(prefixLengthText);
-  if (prefixLength > 32) return false;
+  const [, ip, prefix] = match;
+  if (Number(prefix) > 32) return false;
 
-  return ip.split(".").every((segment) => {
-    const octet = Number(segment);
-    return Number.isInteger(octet) && octet >= 0 && octet <= 255;
+  return ip.split(".").every((s) => {
+    const n = Number(s);
+    return n >= 0 && n <= 255;
   });
 }
 
-function isIpv6Cidr(value) {
-  const match = value.match(/^[0-9a-fA-F:]+\/(\d{1,3})$/);
-  if (!match?.[1]) return false;
+function isIpv6Cidr(input) {
+  const match = input.match(/^[0-9a-fA-F:]+\/(\d{1,3})$/);
+  if (!match) return false;
   return Number(match[1]) <= 128;
 }
 
-function appendNoResolve(ruleLine) {
-  const line = ruleLine.trim();
+function ensureNoResolve(rawLine) {
+  const line = rawLine.trim();
   if (
     !line ||
     line.startsWith("#") ||
@@ -55,12 +53,11 @@ function appendNoResolve(ruleLine) {
     return line;
   }
 
-  const segments = line.split(",");
-  if (segments.length >= 2) {
-    const ruleType = segments[0]?.trim().toUpperCase();
-    return ruleType && NO_RESOLVE_RULE_TYPES.has(ruleType)
-      ? `${line},no-resolve`
-      : line;
+  const parts = line.split(",");
+  if (parts.length >= 2) {
+    const ruleType = parts[0].trim().toUpperCase();
+    if (NO_RESOLVE_RULE_TYPES.has(ruleType)) return `${line},no-resolve`;
+    return line;
   }
 
   if (isIpv4Cidr(line)) return `IP-CIDR,${line},no-resolve`;
@@ -72,16 +69,16 @@ function appendNoResolve(ruleLine) {
 await mkdir(DIST_DIR, { recursive: true });
 
 await Promise.all(
-  RULE_SOURCES.map(async ({ tag, url }) => {
+  RULE_SOURCES.map(async ({ name, url }) => {
     const response = await fetch(url);
     if (!response.ok)
       throw new Error(`Failed to fetch ${url}: ${response.status}`);
 
     const text = await response.text();
-    const lines = text.split(/\r?\n/).map(appendNoResolve);
+    const lines = text.split(/\r?\n/).map(ensureNoResolve);
     const content = lines.join("\n").trimEnd() + "\n";
 
-    const outputPath = path.join(DIST_DIR, `${tag}.txt`);
+    const outputPath = path.join(DIST_DIR, `${name}.txt`);
     await writeFile(outputPath, content, "utf8");
   }),
 );
