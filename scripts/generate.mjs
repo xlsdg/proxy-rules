@@ -44,68 +44,59 @@ function isIpv6Cidr(input) {
   return Number(match[1]) <= 128;
 }
 
-function ensureNoResolve(rawLine) {
+function parseLine(rawLine) {
   const line = rawLine.trim();
-  if (
-    !line ||
-    line.startsWith("#") ||
-    line.startsWith("//") ||
-    /\bno-resolve\b/i.test(line)
-  ) {
-    return line;
+  if (!line || line.startsWith("#") || line.startsWith("//")) {
+    return { kind: "skip", line };
   }
 
   const parts = line.split(",");
   if (parts.length >= 2) {
     const ruleType = parts[0].trim().toUpperCase();
-    if (NO_RESOLVE_RULE_TYPES.has(ruleType)) return `${line},no-resolve`;
-    return line;
+    const value = parts[1].trim();
+    if (NO_RESOLVE_RULE_TYPES.has(ruleType)) {
+      return { kind: "rule", line, ruleType, cidr: value };
+    }
+    return { kind: "other", line };
   }
 
-  if (isIpv4Cidr(line)) return `IP-CIDR,${line},no-resolve`;
-  if (isIpv6Cidr(line)) return `IP-CIDR6,${line},no-resolve`;
+  if (isIpv4Cidr(line))
+    return { kind: "rule", line, ruleType: "IP-CIDR", cidr: line };
+  if (isIpv6Cidr(line))
+    return { kind: "rule", line, ruleType: "IP-CIDR6", cidr: line };
 
-  return line;
+  return { kind: "other", line };
 }
 
-function extractCidr(line) {
-  const trimmed = line.trim();
-  if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith("//")) return null;
+function ensureNoResolve(rawLine) {
+  const parsed = parseLine(rawLine);
+  if (parsed.kind !== "rule") return parsed.line;
+  if (/\bno-resolve\b/i.test(parsed.line)) return parsed.line;
 
-  const parts = trimmed.split(",");
-  if (parts.length >= 2) {
-    const ruleType = parts[0].trim().toUpperCase();
-    const value = parts[1].trim();
-    if (ruleType === "IP-CIDR" && isIpv4Cidr(value)) return { cidr: value, version: 4 };
-    if (ruleType === "IP-CIDR6" && isIpv6Cidr(value)) return { cidr: value, version: 6 };
-    return null;
-  }
-
-  if (isIpv4Cidr(trimmed)) return { cidr: trimmed, version: 4 };
-  if (isIpv6Cidr(trimmed)) return { cidr: trimmed, version: 6 };
-  return null;
+  if (parsed.line.includes(",")) return `${parsed.line},no-resolve`;
+  return `${parsed.ruleType},${parsed.cidr},no-resolve`;
 }
 
 function formatEgernYaml(surgeLines) {
   const ipv4 = [];
   const ipv6 = [];
   for (const line of surgeLines) {
-    const result = extractCidr(line);
-    if (!result) continue;
-    if (result.version === 4) ipv4.push(result.cidr);
-    else ipv6.push(result.cidr);
+    const parsed = parseLine(line);
+    if (parsed.kind !== "rule") continue;
+    if (parsed.ruleType === "IP-CIDR" && isIpv4Cidr(parsed.cidr))
+      ipv4.push(parsed.cidr);
+    else if (parsed.ruleType === "IP-CIDR6" && isIpv6Cidr(parsed.cidr))
+      ipv6.push(parsed.cidr);
   }
 
-  let yaml = "no_resolve: true\n";
+  const sections = ["no_resolve: true"];
   if (ipv4.length) {
-    yaml += "ip_cidr_set:\n";
-    for (const cidr of ipv4) yaml += `  - ${cidr}\n`;
+    sections.push("ip_cidr_set:", ...ipv4.map((cidr) => `  - ${cidr}`));
   }
   if (ipv6.length) {
-    yaml += "ip_cidr6_set:\n";
-    for (const cidr of ipv6) yaml += `  - ${cidr}\n`;
+    sections.push("ip_cidr6_set:", ...ipv6.map((cidr) => `  - ${cidr}`));
   }
-  return yaml;
+  return sections.join("\n") + "\n";
 }
 
 await Promise.all([
