@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-proxy-rules generates proxy rule files from upstream IP CIDR sources. It fetches Telegram and China CIDR ranges from [Loyalsoldier/surge-rules](https://github.com/Loyalsoldier/surge-rules), ensures each rule has the `no-resolve` flag, and writes output to `dist/loon/` (Surge/Loon `.txt` format) and `dist/egern/` (Egern YAML rule sets).
+proxy-rules generates proxy rule files from upstream IP CIDR sources. It fetches Telegram and China CIDR ranges from [Loyalsoldier/surge-rules](https://github.com/Loyalsoldier/surge-rules), ensures each rule has the `no-resolve` flag, and writes output to `dist/loon/` (Loon `.list` format) and `dist/egern/` (Egern YAML rule sets).
 
 ## Commands
 
@@ -22,7 +22,7 @@ Single-script project: `scripts/generate.mjs` does everything.
 4. Validation uses `isIpv4Cidr()` and `isIpv6Cidr()` with strict format checking (octet ranges, prefix lengths)
 5. `extractCidr()` parses Surge-format lines into raw CIDRs with version info for Egern output
 6. `formatEgernYaml()` categorizes CIDRs into `ip_cidr_set` / `ip_cidr6_set` arrays and outputs YAML with `no_resolve: true`
-7. Output goes to `dist/loon/{name}.txt` and `dist/egern/{name}.yaml`
+7. Output goes to `dist/loon/{name}.list` and `dist/egern/{name}.yaml`
 
 ## CI/CD
 

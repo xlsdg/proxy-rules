@@ -25,7 +25,7 @@ jobs:
         id: check
         run: |
           has_changes=false
-          for file in dist/loon/*.txt dist/egern/*.yaml; do
+          for file in dist/loon/*.list dist/egern/*.yaml; do
             [ -f "$file" ] || continue
             rel=${file#dist/}
             old=$(curl -sf "https://raw.githubusercontent.com/${{ github.repository }}/release/$rel" || true)
@@ -56,7 +56,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           tag=$(date -u +%Y%m%d%H%M)
-          gh release create "$tag" dist/loon/*.txt dist/egern/*.yaml \
+          gh release create "$tag" dist/loon/*.list dist/egern/*.yaml \
             --repo "${{ github.repository }}" \
             --title "$tag" \
             --notes "Auto-generated no-resolve rules"

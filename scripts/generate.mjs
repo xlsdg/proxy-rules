@@ -116,7 +116,7 @@ await Promise.all(
     const egernContent = formatEgernYaml(lines);
 
     await Promise.all([
-      writeFile(path.join(LOON_DIR, `${name}.txt`), loonContent, "utf8"),
+      writeFile(path.join(LOON_DIR, `${name}.list`), loonContent, "utf8"),
       writeFile(path.join(EGERN_DIR, `${name}.yaml`), egernContent, "utf8"),
     ]);
   }),
