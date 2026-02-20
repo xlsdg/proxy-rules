@@ -68,20 +68,30 @@ function parseLine(rawLine) {
   return { kind: "other", line: trimmed };
 }
 
-function appendNoResolve(rawLine) {
-  const parsed = parseLine(rawLine);
-  if (parsed.kind !== "rule") return parsed.line;
-  if (/\bno-resolve\b/i.test(parsed.line)) return parsed.line;
+function buildLoonList(rawLines) {
+  const lines = [];
+  for (const rawLine of rawLines) {
+    const parsed = parseLine(rawLine);
+    if (parsed.kind !== "rule") {
+      lines.push(parsed.line);
+      continue;
+    }
+    if (/\bno-resolve\b/i.test(parsed.line)) {
+      lines.push(parsed.line);
+      continue;
+    }
 
-  if (parsed.line.includes(",")) return `${parsed.line},no-resolve`;
-  return `${parsed.ruleType},${parsed.cidr},no-resolve`;
+    if (parsed.line.includes(",")) lines.push(`${parsed.line},no-resolve`);
+    else lines.push(`${parsed.ruleType},${parsed.cidr},no-resolve`);
+  }
+  return lines.join("\n").trimEnd() + "\n";
 }
 
-function buildEgernYaml(loonLines) {
+function buildEgernYaml(rawLines) {
   const ipv4Cidrs = [];
   const ipv6Cidrs = [];
-  for (const line of loonLines) {
-    const parsed = parseLine(line);
+  for (const rawLine of rawLines) {
+    const parsed = parseLine(rawLine);
     if (parsed.kind !== "rule") continue;
     if (parsed.ruleType === "IP-CIDR" && isIpv4Cidr(parsed.cidr))
       ipv4Cidrs.push(parsed.cidr);
@@ -111,9 +121,9 @@ await Promise.all(
       throw new Error(`Failed to fetch ${url}: ${response.status}`);
 
     const rawText = await response.text();
-    const loonLines = rawText.split(/\r?\n/).map(appendNoResolve);
-    const loonContent = loonLines.join("\n").trimEnd() + "\n";
-    const egernContent = buildEgernYaml(loonLines);
+    const rawLines = rawText.split(/\r?\n/);
+    const loonContent = buildLoonList(rawLines);
+    const egernContent = buildEgernYaml(rawLines);
 
     await Promise.all([
       writeFile(path.join(LOON_DIR, `${name}.list`), loonContent, "utf8"),

@@ -17,11 +17,11 @@ No package.json or external dependencies. Requires Node.js 18+ (uses native `fet
 Single-script project: `scripts/generate.mjs` does everything.
 
 1. Rule sources are defined as `{name, url}` objects at the top of the file
-2. Each source is fetched in parallel, lines are processed through `appendNoResolve()`
-3. `appendNoResolve()` handles four cases: lines already with no-resolve, lines with known rule types (IP-CIDR, IP-CIDR6, IP-ASN, GEOIP), raw IPv4 CIDRs, and raw IPv6 CIDRs
+2. Each source is fetched in parallel, raw lines are split and passed to two symmetric builder functions
+3. `parseLine()` parses Surge-format lines into structured objects with rule type and CIDR info
 4. Validation uses `isIpv4Cidr()` and `isIpv6Cidr()` with strict format checking (octet ranges, prefix lengths)
-5. `parseLine()` parses Surge-format lines into structured objects with rule type and CIDR info
-6. `buildEgernYaml()` categorizes CIDRs into `ip_cidr_set` / `ip_cidr6_set` arrays and outputs YAML with `no_resolve: true`
+5. `buildLoonList(rawLines)` parses each line, appends `no-resolve` to rule lines, and joins them into Loon `.list` format
+6. `buildEgernYaml(rawLines)` categorizes CIDRs into `ip_cidr_set` / `ip_cidr6_set` arrays and outputs YAML with `no_resolve: true`
 7. Output goes to `dist/loon/{name}.list` and `dist/egern/{name}.yaml`
 
 ## CI/CD
