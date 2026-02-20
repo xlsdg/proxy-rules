@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIST_DIR = path.resolve(__dirname, "..", "dist");
+const LOON_DIR = path.join(DIST_DIR, "loon");
+const EGERN_DIR = path.join(DIST_DIR, "egern");
 
 const RULE_SOURCES = [
   {
@@ -66,7 +68,50 @@ function ensureNoResolve(rawLine) {
   return line;
 }
 
-await mkdir(DIST_DIR, { recursive: true });
+function extractCidr(line) {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith("//")) return null;
+
+  const parts = trimmed.split(",");
+  if (parts.length >= 2) {
+    const ruleType = parts[0].trim().toUpperCase();
+    const value = parts[1].trim();
+    if (ruleType === "IP-CIDR" && isIpv4Cidr(value)) return { cidr: value, version: 4 };
+    if (ruleType === "IP-CIDR6" && isIpv6Cidr(value)) return { cidr: value, version: 6 };
+    return null;
+  }
+
+  if (isIpv4Cidr(trimmed)) return { cidr: trimmed, version: 4 };
+  if (isIpv6Cidr(trimmed)) return { cidr: trimmed, version: 6 };
+  return null;
+}
+
+function formatEgernYaml(surgeLines) {
+  const ipv4 = [];
+  const ipv6 = [];
+  for (const line of surgeLines) {
+    const result = extractCidr(line);
+    if (!result) continue;
+    if (result.version === 4) ipv4.push(result.cidr);
+    else ipv6.push(result.cidr);
+  }
+
+  let yaml = "no_resolve: true\n";
+  if (ipv4.length) {
+    yaml += "ip_cidr_set:\n";
+    for (const cidr of ipv4) yaml += `  - ${cidr}\n`;
+  }
+  if (ipv6.length) {
+    yaml += "ip_cidr6_set:\n";
+    for (const cidr of ipv6) yaml += `  - ${cidr}\n`;
+  }
+  return yaml;
+}
+
+await Promise.all([
+  mkdir(LOON_DIR, { recursive: true }),
+  mkdir(EGERN_DIR, { recursive: true }),
+]);
 
 await Promise.all(
   RULE_SOURCES.map(async ({ name, url }) => {
@@ -76,9 +121,12 @@ await Promise.all(
 
     const text = await response.text();
     const lines = text.split(/\r?\n/).map(ensureNoResolve);
-    const content = lines.join("\n").trimEnd() + "\n";
+    const loonContent = lines.join("\n").trimEnd() + "\n";
+    const egernContent = formatEgernYaml(lines);
 
-    const outputPath = path.join(DIST_DIR, `${name}.txt`);
-    await writeFile(outputPath, content, "utf8");
+    await Promise.all([
+      writeFile(path.join(LOON_DIR, `${name}.txt`), loonContent, "utf8"),
+      writeFile(path.join(EGERN_DIR, `${name}.yaml`), egernContent, "utf8"),
+    ]);
   }),
 );

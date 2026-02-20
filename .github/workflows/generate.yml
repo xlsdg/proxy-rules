@@ -25,10 +25,10 @@ jobs:
         id: check
         run: |
           has_changes=false
-          for file in dist/*.txt; do
-            name=$(basename "$file")
-            # Fetch existing file from release branch (if any)
-            old=$(curl -sf "https://raw.githubusercontent.com/${{ github.repository }}/release/$name" || true)
+          for file in dist/loon/*.txt dist/egern/*.yaml; do
+            [ -f "$file" ] || continue
+            rel=${file#dist/}
+            old=$(curl -sf "https://raw.githubusercontent.com/${{ github.repository }}/release/$rel" || true)
             new=$(cat "$file")
             if [ "$old" != "$new" ]; then
               has_changes=true
@@ -56,7 +56,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           tag=$(date -u +%Y%m%d%H%M)
-          gh release create "$tag" dist/*.txt \
+          gh release create "$tag" dist/loon/*.txt dist/egern/*.yaml \
             --repo "${{ github.repository }}" \
             --title "$tag" \
             --notes "Auto-generated no-resolve rules"
